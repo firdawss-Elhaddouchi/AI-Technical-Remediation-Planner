@@ -1,0 +1,591 @@
+{
+  "audit_metadata": {
+    "title": "TECHNICAL AUDIT REPORT",
+    "project_name": "Core Inventory & User Management API",
+    "repository": {
+      "files": 148,
+      "lines_of_code": 24830,
+      "coverage": 11.8,
+      "duplication": 13.6,
+      "python_version": "3.10",
+      "framework": "FastAPI",
+      "database": "PostgreSQL 14",
+      "architecture": "Monolithic REST API"
+    },
+    "audit_date": "2026-06-27",
+    "executive_summary": "This technical audit identifies raw technical findings only. No prioritization, remediation plan, effort estimation, dependencies, or roadmap are included. All findings are initialized with 'Open' status.",
+    "total_findings": 30
+  },
+  "findings": [
+    {
+      "uuid": "finding-00001",
+      "id": "SEC-01",
+      "domain": "Security",
+      "issue_type": "Hardcoded Secrets",
+      "component": "Configuration",
+      "layer": "Backend Settings",
+      "location": {
+        "file": "app/config/settings.py",
+        "function": null,
+        "line": "14-18"
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "DATABASE_PASSWORD = 'prod_db_pass_2026'\nJWT_SECRET = 'super_secret_key_6789!'"
+      },
+      "description": "Application database credentials and signature keys are stored directly inside the source code repository.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00002",
+      "id": "SEC-02",
+      "domain": "Security",
+      "issue_type": "SQL Injection",
+      "component": "Users API",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/users.py",
+        "function": "get_user_by_custom_query",
+        "line": 89
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "query = f'SELECT * FROM users WHERE custom_filter = {user_input}'\ncursor.execute(query)"
+      },
+      "description": "Database queries are dynamically constructed through raw user input concatenation without parameterization.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00003",
+      "id": "SEC-03",
+      "domain": "Security",
+      "issue_type": "Permissive CORS Policy",
+      "component": "App Core",
+      "layer": "Middleware",
+      "location": {
+        "file": "app/main.py",
+        "function": "init_app",
+        "line": 32
+      },
+      "evidence": {
+        "type": "configuration",
+        "snippet": "allow_origins=['*']"
+      },
+      "description": "Cross-Origin Resource Sharing is configured with a wildcard, allowing unverified external domains to trigger actions.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00004",
+      "id": "SEC-04",
+      "domain": "Security",
+      "issue_type": "Missing Rate Limiting",
+      "component": "Authentication",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/auth.py",
+        "function": "login_endpoint",
+        "line": 45
+      },
+      "evidence": {
+        "type": "architecture_gap",
+        "snippet": "No rate-limiting decorators or middleware attached to /api/v1/auth/login"
+      },
+      "description": "The login routing endpoint exposes unlimited authentication check iterations, vulnerable to brute-force attacks.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00005",
+      "id": "SEC-05",
+      "domain": "Security",
+      "issue_type": "Weak Cryptography",
+      "component": "Cryptography Utilities",
+      "layer": "Security Helpers",
+      "location": {
+        "file": "app/utils/crypto.py",
+        "function": "hash_password",
+        "line": 12
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "return hashlib.md5(password.encode()).hexdigest()"
+      },
+      "description": "User storage access relies on the obsolete MD5 hashing algorithm instead of secure key derivation functions like bcrypt.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00006",
+      "id": "SEC-06",
+      "domain": "Security",
+      "issue_type": "Broken Object Level Authorization",
+      "component": "Admin Engine",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/admin.py",
+        "function": "purge_system_logs",
+        "line": 74
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "@router.post('/purge')\nasync def purge_logs(current_user: User = Depends(get_current_user)):"
+      },
+      "description": "Sensitive administrative endpoints verify user identity but omit specific role mapping checks (e.g., is_admin).",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00007",
+      "id": "SEC-07",
+      "domain": "Security",
+      "issue_type": "Missing Security Headers",
+      "component": "App Core",
+      "layer": "Middleware",
+      "location": {
+        "file": "app/main.py",
+        "function": "init_app",
+        "line": 15
+      },
+      "evidence": {
+        "type": "configuration",
+        "snippet": "FastAPI instance lacks SecureCookies, X-XSS-Protection, or Content-Security-Policy configurations."
+      },
+      "description": "The server response does not populate essential HTTP security headers needed to prevent XSS and clickjacking.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00008",
+      "id": "DB-01",
+      "domain": "Database & Performance",
+      "issue_type": "Missing Index",
+      "component": "Inventory Table",
+      "layer": "Database Schema",
+      "location": {
+        "file": "inventory_items",
+        "function": "PostgreSQL Table Context",
+        "line": null
+      },
+      "evidence": {
+        "type": "database_metric",
+        "snippet": "High sequential scan rate on filtering columns: tenant_id, category_id, created_at"
+      },
+      "description": "High-frequency filtering keys are queried continuously without indices, creating resource-intensive sequential scans.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00009",
+      "id": "DB-02",
+      "domain": "Database & Performance",
+      "issue_type": "N+1 Query Deficit",
+      "component": "Inventory API",
+      "layer": "Data Access Layer",
+      "location": {
+        "file": "app/routes/inventory.py",
+        "function": "get_all_items",
+        "line": 112
+      },
+      "evidence": {
+        "type": "orm_log",
+        "snippet": "SELECT * FROM items; -> followed by 100 individual queries: SELECT * FROM categories WHERE id = x;"
+      },
+      "description": "Iterating over nested entities triggers secondary lookup queries instead of performing an efficient eager SQL join operation.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00010",
+      "id": "DB-03",
+      "domain": "Database & Performance",
+      "issue_type": "Missing Connection Pooling",
+      "component": "Database Client",
+      "layer": "Data Access Layer",
+      "location": {
+        "file": "app/database/connection.py",
+        "function": "get_db_session",
+        "line": 22
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "connection = psycopg2.connect(...)\n# Opened and closed explicitly on every HTTP request"
+      },
+      "description": "The persistence framework constructs an isolated database link per request cycle without utilizing connection pool structures.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00011",
+      "id": "DB-04",
+      "domain": "Database & Performance",
+      "issue_type": "Missing Cache Layer",
+      "component": "Analytics Dashboard",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/analytics.py",
+        "function": "fetch_global_aggregations",
+        "line": 150
+      },
+      "evidence": {
+        "type": "performance_metric",
+        "snippet": "Execution time: 3.4 seconds for intensive count/sum matrix grouping runs."
+      },
+      "description": "Heavy complex relational operations are recalculated entirely on-demand on raw data without server-side caching.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00012",
+      "id": "DB-05",
+      "domain": "Database & Performance",
+      "issue_type": "Unbounded Queries",
+      "component": "Orders Hub",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/orders.py",
+        "function": "list_historical_orders",
+        "line": 56
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "return db.query(Order).all() # No limit or offset bindings"
+      },
+      "description": "Data pipelines return arbitrary table volumes to client spaces without applying page, range, or size limits.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00013",
+      "id": "DB-06",
+      "domain": "Database & Performance",
+      "issue_type": "Missing ACID Transactions",
+      "component": "Order Processing",
+      "layer": "Business Logic Service",
+      "location": {
+        "file": "app/services/orders.py",
+        "function": "checkout_cart",
+        "line": 104
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "create_order_record(data)\ndecrement_inventory_stock(data) # Occurs outside an atomic block context"
+      },
+      "description": "Multistep related write sequences run independently without transactional wrapper execution, risking database desynchronization.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00014",
+      "id": "ARCH-01",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Monolithic File Anti-Pattern",
+      "component": "Routing Modules",
+      "layer": "API Routing",
+      "location": {
+        "file": "app/routes/monolith_router.py",
+        "function": null,
+        "line": "1-2540"
+      },
+      "evidence": {
+        "type": "repository_metric",
+        "snippet": "File size: 2,540 lines of code handling 22 discrete endpoints across 4 distinct domains."
+      },
+      "description": "A dense monolith module merges authentication routing, storage workflows, and pricing algorithms, reducing maintainability.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00015",
+      "id": "CODE-01",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Improper Exception Handling",
+      "component": "Payment Integration",
+      "layer": "Business Logic Service",
+      "location": {
+        "file": "app/services/payment.py",
+        "function": "process_stripe_webhook",
+        "line": 42
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "try:\n    execute_payment_logic()\nexcept Exception:\n    pass"
+      },
+      "description": "Broad catch-all constructs suppress system-wide unexpected runtime errors silently without tracking execution stacks.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00016",
+      "id": "CODE-02",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Missing Static Typing",
+      "component": "Orders Hub",
+      "layer": "API Controller",
+      "location": {
+        "file": "app/routes/orders.py",
+        "function": "update_order_status",
+        "line": 88
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "async def update_status(order_id, payload):\n    return raw_dict_response"
+      },
+      "description": "Core routing routines skip Python type hints and bypass structural Pydantic validation input/output guarantees.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00017",
+      "id": "CODE-03",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Code Duplication",
+      "component": "Controllers Interface",
+      "layer": "API Controller",
+      "location": {
+        "file": "Multiple Controllers",
+        "function": "Input parsing blocks",
+        "line": null
+      },
+      "evidence": {
+        "type": "repository_metric",
+        "snippet": "Identical phone/email regex matches written separately inside users.py, vendors.py, and clients.py"
+      },
+      "description": "Input schema parsing criteria contain explicit duplicate blocks across domains rather than centralizing structural schemas.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00018",
+      "id": "CODE-04",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Dead Code",
+      "component": "Utilities Lib",
+      "layer": "Helper Modules",
+      "location": {
+        "file": "app/utils/old_parser.py",
+        "function": null,
+        "line": "1-120"
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "Module contains 5 parsing functions with zero references across active repository modules."
+      },
+      "description": "Unused legacy processing tools remain inside the code repository, raising clutter metrics.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00019",
+      "id": "CODE-05",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Inconsistent Naming conventions",
+      "component": "Models Namespace",
+      "layer": "Database Schema",
+      "location": {
+        "file": "Project Wide",
+        "function": "Models definitions",
+        "line": null
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "Mix of camelCase fields (userId) and snake_case properties (created_at) inside database structural maps."
+      },
+      "description": "Property names alternate inconsistently between case styles across persistence objects, breaking structural style guides.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00020",
+      "id": "CODE-06",
+      "domain": "Code Quality & Architecture",
+      "issue_type": "Magic Numbers Insertion",
+      "component": "Pricing Engine",
+      "layer": "Business Logic Service",
+      "location": {
+        "file": "Project Wide",
+        "function": "calculate_tax",
+        "line": 34
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "final_price = base_price * 1.206 # What does 1.206 stand for?"
+      },
+      "description": "Business scaling algorithms use raw numeric literals inline instead of naming variables as isolated explicit constants.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00021",
+      "id": "TEST-01",
+      "domain": "Testing & CI/CD",
+      "issue_type": "Low Test Coverage",
+      "component": "Test Infrastructure",
+      "layer": "Verification Layer",
+      "location": {
+        "file": "tests",
+        "function": "pytest suite run",
+        "line": null
+      },
+      "evidence": {
+        "type": "coverage_metric",
+        "snippet": "Stripe payment and warehouse processing tracks show 0.0% coverage execution logs."
+      },
+      "description": "Overall code path validation sits below 12%, missing integration checks for business-critical payment funnels.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00022",
+      "id": "TEST-02",
+      "domain": "Testing & CI/CD",
+      "issue_type": "Unmocked External Calls",
+      "component": "Shipping Tests",
+      "layer": "Verification Layer",
+      "location": {
+        "file": "tests/test_shipping.py",
+        "function": "test_create_shipment",
+        "line": 19
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "response = httpx.post('https://api.dhl.com/v1/shipments', json=payload)"
+      },
+      "description": "Local test modules request live endpoint executions on third-party domains, causing environment fragility.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00023",
+      "id": "TEST-03",
+      "domain": "Testing & CI/CD",
+      "issue_type": "Missing Performance Tests",
+      "component": "Test Infrastructure",
+      "layer": "Verification Layer",
+      "location": {
+        "file": "tests",
+        "function": null,
+        "line": null
+      },
+      "evidence": {
+        "type": "architecture_gap",
+        "snippet": "Total absence of Locust, K6, or JMeter benchmarking configuration manifests."
+      },
+      "description": "The workspace does not run high-volume concurrent request tools to find performance drop points before deployment.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00024",
+      "id": "TEST-04",
+      "domain": "Testing & CI/CD",
+      "issue_type": "Missing CI/CD Pipelines",
+      "component": "Deployment Workflows",
+      "layer": "Infrastructure Devops",
+      "location": {
+        "file": "Project Root",
+        "function": null,
+        "line": null
+      },
+      "evidence": {
+        "type": "architecture_gap",
+        "snippet": "No github/workflows directory, .gitlab-ci.yml, or Jenkinsfile present."
+      },
+      "description": "The platform relies on manual server deployments, missing automated test runs on branch push cycles.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00025",
+      "id": "INFRA-01",
+      "domain": "Infrastructure & Deployment",
+      "issue_type": "Vulnerable Dependencies",
+      "component": "Package Manifest",
+      "layer": "Environment Setup",
+      "location": {
+        "file": "requirements.txt",
+        "function": null,
+        "line": 8
+      },
+      "evidence": {
+        "type": "vulnerability_scan",
+        "snippet": "PyJWT==1.7.1 (Vulnerable to CVE-2022-39174 - Remote Code Execution threat)"
+      },
+      "description": "Third-party libraries use legacy versions that contain known critical security vulnerabilities.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00026",
+      "id": "INFRA-02",
+      "domain": "Infrastructure & Deployment",
+      "issue_type": "Missing Containerization",
+      "component": "Deployment Workspace",
+      "layer": "Infrastructure Devops",
+      "location": {
+        "file": "Project Root",
+        "function": null,
+        "line": null
+      },
+      "evidence": {
+        "type": "architecture_gap",
+        "snippet": "No Dockerfile or docker-compose.yml available in the root repository path."
+      },
+      "description": "Runtime environments use manual bare metal hosting setups, creating environment mismatch bugs.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00027",
+      "id": "INFRA-03",
+      "domain": "Infrastructure & Deployment",
+      "issue_type": "Absolute Paths Usage",
+      "component": "Storage Subsystem",
+      "layer": "Helper Modules",
+      "location": {
+        "file": "app/utils/file_storage.py",
+        "function": "save_uploaded_file",
+        "line": 8
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "UPLOAD_DIR = 'C:\\Users\\Administrator\\Uploads\\'"
+      },
+      "description": "Local storage targets are tied to absolute host directories, which breaks execution when moved to Linux servers.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00028",
+      "id": "INFRA-04",
+      "domain": "Infrastructure & Deployment",
+      "issue_type": "Non-Standard Environments Configuration",
+      "component": "App Core",
+      "layer": "Backend Settings",
+      "location": {
+        "file": "Project Root",
+        "function": null,
+        "line": null
+      },
+      "evidence": {
+        "type": "architecture_gap",
+        "snippet": "No .env.example, config.yaml, or distinct dev/staging/prod split setups."
+      },
+      "description": "The application lacks environment-specific runtime states, risking dev tasks connecting to production databases.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00029",
+      "id": "OBS-01",
+      "domain": "Observability & Documentation",
+      "issue_type": "Unstructured Logging",
+      "component": "Logging Middlewares",
+      "layer": "Cross-Cutting Layer",
+      "location": {
+        "file": "Project Wide",
+        "function": "catch_errors",
+        "line": null
+      },
+      "evidence": {
+        "type": "source_code",
+        "snippet": "print(f'Error occurred inside database operation: {err}')"
+      },
+      "description": "System monitoring tracks events using basic print statements, lacking log levels or indexable metadata.",
+      "status": "Open"
+    },
+    {
+      "uuid": "finding-00030",
+      "id": "DOC-01",
+      "domain": "Observability & Documentation",
+      "issue_type": "Incomplete OpenAPI Specs",
+      "component": "Documentation Engine",
+      "layer": "API Documentation",
+      "location": {
+        "file": "FastAPI Docs",
+        "function": null,
+        "line": null
+      },
+      "evidence": {
+        "type": "configuration",
+        "snippet": "Swagger UI populates routing paths but lists all responses under generic '200 OK' schemas with blank fields."
+      },
+      "description": "Auto-generated OpenAPI files omit error response tracking, request schema models, and text descriptions.",
+      "status": "Open"
+    }
+  ]
+}
